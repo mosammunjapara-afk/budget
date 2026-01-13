@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Budget Ranker Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body { font-family:'Segoe UI', sans-serif; margin:0; background:#f0f2f5; }
+header { background:#4CAF50; color:white; font-size:26px; text-align:center; padding:20px; }
+.container { display:flex; max-width:1200px; margin:20px auto; gap:20px; flex-wrap:wrap; }
+
+.left-panel, .right-panel {
+    background:white; padding:20px; border-radius:12px;
+    box-shadow:0 8px 20px rgba(0,0,0,0.1);
+}
+.left-panel { flex:1; min-width:400px; }
+.right-panel { flex:2; min-width:500px; }
+
+.summary { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
+.summary div {
+    flex:1; background:#f0f9f4; padding:15px; text-align:center;
+    border-radius:8px; font-weight:bold;
+}
+
+form { display:flex; flex-direction:column; gap:10px; }
+.form-row { display:flex; gap:10px; }
+form input, form select {
+    flex:1; padding:10px; border-radius:8px; border:1px solid #ccc;
+}
+form button {
+    padding:10px; border:none; border-radius:8px; background:#4CAF50; color:white;
+}
+.clear-btn { background:#dc3545; }
+
+table { width:100%; border-collapse:collapse; margin-top:10px; }
+th, td { padding:8px; border-bottom:1px solid #ccc; }
+.income { color:green; font-weight:bold; }
+.expense { color:blue; font-weight:bold; }
+
+.delete-btn { padding:4px 8px; border:none; cursor:pointer; border-radius:4px; }
+</style>
+</head>
+<body>
+
+<header>💰 Budget Ranker Dashboard</header>
+
+<div class="container">
+
+    <!-- LEFT -->
+    <div class="left-panel">
+        <div class="summary">
+            <div id="balanceCard">Balance: ₹0.00</div>
+            <div id="incomeCard">Income: ₹0.00</div>
+            <div id="expenseCard">Expense: ₹0.00</div>
+        </div>
+
+        <form id="budgetForm">
+            <!-- Row 1 -->
+            <div class="form-row">
+                <input type="text" id="name" placeholder="Transaction Name" required>
+                <select id="type" required>
+                    <option value="">Type</option>
+                    <option value="Income">Income</option>
+                    <option value="Expense">Expense</option>
+                </select>
+            </div>
+
+            <!-- Row 2 -->
+            <div class="form-row">
+                <input type="number" id="amount" step="0.01" placeholder="Amount" required>
+                <input type="text" id="category" placeholder="Category">
+            </div>
+
+            <!-- NEW ROW FOR DATE -->
+            <div class="form-row">
+                <input type="date" id="date">
+            </div>
+
+            <!-- Buttons -->
+            <div class="form-row">
+                <button type="submit">Add</button>
+                <button type="button" class="clear-btn" onclick="clearForm()">Clear</button>
+            </div>
+        </form>
+
+        <h3>Recent Transactions</h3>
+        <table id="recentTable">
+            <thead>
+                <tr>
+                    <th>No</th><th>Name</th><th>Amount</th><th>Category</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right-panel">
+        <h2>All Transactions</h2>
+        <table id="allTable">
+            <thead>
+                <tr>
+                    <th>No</th><th>Name</th><th>Type</th><th>Amount</th><th>Date</th><th>Category</th><th>Action</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <br><br>
+        <h2>Continuation Pattern Chart</h2>
+        <canvas id="patternsChart" style="width:100%; height:300px;"></canvas>
+    </div>
+
+</div>
+
+<script>
+let budgetData = [];
+let editIndex = -1;
+let continuationChart;
+
+function clearForm(){
+    document.getElementById("budgetForm").reset();
+    editIndex = -1;
+}
+
+function updateContinuationChart(){
+    const dates = budgetData.map(x => x.date || "-");
+    const incomes = budgetData.map(x => x.type==="Income" ? x.amount : 0);
+    const expenses = budgetData.map(x => x.type==="Expense" ? x.amount : 0);
+
+    let balances=[], b=0;
+    budgetData.forEach(x=>{
+        b += (x.type==="Income"?x.amount:-x.amount);
+        balances.push(b);
+    });
+
+    if(continuationChart) continuationChart.destroy();
+
+    continuationChart = new Chart(
+        document.getElementById("patternsChart"),
+        {
+            type:"line",
+            data:{
+                labels:dates,
+                datasets:[
+                    {label:"Income", data:incomes, borderColor:"green", tension:0.3},
+                    {label:"Expense", data:expenses, borderColor:"red", tension:0.3},
+                    {label:"Balance", data:balances, borderColor:"blue", tension:0.3}
+                ]
+            }
+        }
+    );
+}
+
+function updateDashboard(){
+    let income=0, expense=0;
+
+    budgetData.forEach(x => x.type==="Income" ? income+=x.amount : expense+=x.amount);
+
+    let balance=income-expense;
+
+    document.getElementById("balanceCard").textContent="Balance: ₹"+balance.toFixed(2);
+    document.getElementById("incomeCard").textContent="Income: ₹"+income.toFixed(2);
+    document.getElementById("expenseCard").textContent="Expense: ₹"+expense.toFixed(2);
+
+    const recentBody=document.querySelector("#recentTable tbody");
+    const allBody=document.querySelector("#allTable tbody");
+
+    recentBody.innerHTML="";
+    allBody.innerHTML="";
+
+    for(let i=budgetData.length-1,s=1;i>=0&&s<=5;i--,s++){
+        const x = budgetData[i];
+        recentBody.innerHTML += `
+            <tr><td>${s}</td><td>${x.name}</td><td>₹${x.amount}</td><td>${x.category}</td></tr>
+        `;
+    }
+
+    budgetData.forEach((x,i)=>{
+        allBody.innerHTML += `
+            <tr>
+                <td>${i+1}</td>
+                <td>${x.name}</td>
+                <td class="${x.type==="Income"?"income":"expense"}">${x.type}</td>
+                <td>₹${x.amount}</td>
+                <td>${x.date}</td>
+                <td>${x.category}</td>
+                <td>
+                    <button class="delete-btn" onclick="deleteEntry(${i})">Delete</button>
+                    <button class="delete-btn" style="background:#007bff;color:white;" onclick="editEntry(${i})">Edit</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    updateContinuationChart();
+}
+
+function deleteEntry(i){
+    budgetData.splice(i,1);
+    updateDashboard();
+}
+
+function editEntry(i){
+    const x=budgetData[i];
+    document.getElementById("name").value=x.name;
+    document.getElementById("type").value=x.type;
+    document.getElementById("amount").value=x.amount;
+    document.getElementById("category").value=x.category;
+    document.getElementById("date").value=x.date;
+    editIndex=i;
+}
+
+document.getElementById("budgetForm").addEventListener("submit", function(e){
+    e.preventDefault();
+
+    let data={
+        name:document.getElementById("name").value,
+        type:document.getElementById("type").value,
+        amount:parseFloat(document.getElementById("amount").value),
+        category:document.getElementById("category").value || "General",
+        date:document.getElementById("date").value || "-"
+    };
+
+    if(editIndex===-1) budgetData.push(data);
+    else { budgetData[editIndex]=data; editIndex=-1; }
+
+    updateDashboard();
+    this.reset();
+});
+</script>
+
+</body>
+</html>
